@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Architecture Map</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape-dagre/2.5.0/cytoscape-dagre.min.js"></script>
+
+    <style>
+        :root {
+            /* Light Theme Palette */
+            --bg-color: #f8fafc;
+            --panel-bg: #ffffff;
+            --panel-border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --accent-blue: #2563eb;
+            --accent-green: #059669;
+            --accent-red: #dc2626;
+            --accent-purple: #7c3aed;
+            --accent-amber: #d97706;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Cytoscape Container */
+        #cy {
+            flex-grow: 1;
+            height: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Sidebar UI */
+        #sidebar {
+            width: 380px;
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid var(--panel-border);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease;
+        }
+
+        #sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            letter-spacing: -0.025em;
+            background: linear-gradient(to right, #2563eb, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .search-box {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .search-box input {
+            width: 100%;
+            background-color: #f1f5f9;
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: var(--accent-blue);
+            background-color: #ffffff;
+        }
+
+        #node-details {
+            padding: 24px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .empty-state {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .detail-card {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .detail-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-main);
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .badge.data { background-color: rgba(16, 185, 129, 0.15); color: #059669; }
+        .badge.model { background-color: rgba(59, 130, 246, 0.15); color: #2563eb; }
+        .badge.loss { background-color: rgba(239, 68, 68, 0.15); color: #dc2626; }
+        .badge.tensor { background-color: rgba(139, 92, 246, 0.15); color: #7c3aed; }
+
+        .detail-filepath {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            background: #f1f5f9;
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .detail-section {
+            margin-bottom: 20px;
+        }
+
+        .detail-section h3 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 4px;
+        }
+
+        .detail-section p {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: #334155;
+        }
+
+        .tensor-box {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            background: #f1f5f9;
+            border-left: 3px solid var(--accent-purple);
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            border-radius: 0 4px 4px 0;
+            color: #1e293b;
+        }
+
+        /* Controls */
+        #controls {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .btn:hover {
+            background-color: #f8fafc;
+            border-color: #cbd5e1;
+            transform: translateY(-1px);
+        }
+        
+        .btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h1>Explorer</h1>
+        </div>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search modules, tensors, files...">
+        </div>
+        <div id="node-details">
+            <div class="empty-state" id="empty-state">
+                <svg style="width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.5;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <p>Select a node in the graph to view its properties, code references, and tensor shapes.</p>
+            </div>
+
+            <div class="detail-card" id="detail-card">
+                <div class="detail-title">
+                    <span id="d-title">Node Title</span>
+                    <span class="badge" id="d-badge">MODEL</span>
+                </div>
+                <div class="detail-filepath" id="d-filepath">path/to/file.py</div>
+                
+                <div class="detail-section">
+                    <h3>Description</h3>
+                    <p id="d-desc">Detailed description goes here.</p>
+                </div>
+                
+                <div class="detail-section" id="section-inputs">
+                    <h3>Input Tensors</h3>
+                    <div id="d-inputs"></div>
+                </div>
+
+                <div class="detail-section" id="section-outputs">
+                    <h3>Output Tensors</h3>
+                    <div id="d-outputs"></div>
+                </div>
+                
+                <div class="detail-section" id="section-shapes" style="display: none; background: rgba(59, 130, 246, 0.05); padding: 16px; border-radius: 6px; border-left: 4px solid var(--accent-blue); margin-top: 24px;">
+                    <h3 style="color: var(--accent-blue); margin-bottom: 12px; font-weight: 700;">Giải Thích Kích Thước (Shapes)</h3>
+                    <ul id="d-shapes" style="font-size: 0.9rem; padding-left: 20px; color: #334155; line-height: 1.6;"></ul>
+                </div>
+                
+                <div class="detail-section" id="section-deps">
+                    <h3>Dependencies</h3>
+                    <p id="d-deps" style="font-size: 0.85rem;"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="cy"></div>
+
+    <div id="controls">
+        <button class="btn" id="btn-fit">
+            <svg viewBox="0 0 24 24"><path d="M15 3h6v6h-2V6.41L14.41 11 13 9.59 17.59 5H15V3zM5 15H3v6h6v-2H6.41L11 14.41 9.59 13 5 17.59V15z"/></svg>
+            Fit View
+        </button>
+        <button class="btn" id="btn-layout">
+            <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm2-8h4v6H5V5zm8 16h8V11h-8v10zm2-8h4v6h-4v-6zM13 3v6h8V3h-8zm6 4h-4V5h4v2zM3 21h8v-6H3v6zm2-4h4v2H5v-2z"/></svg>
+            Relayout
+        </button>
+        <button class="btn" id="btn-fullscreen">
+            <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            Fullscreen
+        </button>
+    </div>
+
+    <script>
+        // --- Data Definition ---
+        const architectureData = {
+            nodes: [
+                // Groups (Compounds)
+                { data: { id: 'g_data', label: 'Dataset & Loading', type: 'group' } },
+                { data: { id: 'g_backbone', label: 'ViT-B/16 Backbone', type: 'group' } },
+                { data: { id: 'g_embed', label: 'Cross-Modal Embedding', type: 'group' } },
+                { data: { id: 'g_retrieval', label: 'Retrieval & Matching', type: 'group' } },
+                { data: { id: 'g_loss', label: 'Loss & Optimization', type: 'group' } },
+
+                // Data Nodes
+                { data: { id: 'dataset', parent: 'g_data', label: 'Datasets\n(Sketchy, TU, QuickDraw)', type: 'data', desc: 'Raw sketch and image datasets.', filepath: 'datasets/' } },
+                { data: { id: 'loader', parent: 'g_data', label: 'TrainSet / ValidSet Loader', type: 'data', desc: 'Custom dataloader sampling triplets: anchor sketch, positive image, positive sketch, negative image.', filepath: 'data_utils/dataset.py', inputs: ['Dataset Files'], outputs: ['sk, im, sk_neg, im_neg'], shapeDetails: ['sk, im: Dữ liệu thô được load từ đĩa dưới dạng đường dẫn hoặc numpy/image'] } },
+                { data: { id: 'aug', parent: 'g_data', label: 'Augmentations', type: 'data', desc: 'Image resize (224), Sketch whitespace removal, scaling, padding to square, Normalize.', filepath: 'data_utils/utils.py', inputs: ['Raw Images/Sketches'], outputs: ['[B, 3, 224, 224]'], shapeDetails: ['B: Kích thước Batch (ví dụ 15)', '3: Số kênh màu (RGB)', '224: Cố định kích thước chiều cao và rộng của ảnh là 224 pixel'] } },
+
+                // Backbone Nodes
+                { data: { id: 'patch_emb', parent: 'g_backbone', label: 'ViT Patch + Scale Emb', type: 'model', desc: 'Extracts 16x16 patches. Adds standard embedding and custom Scale_Embedding.', filepath: 'model/sa.py', inputs: ['[B, 3, 224, 224]'], outputs: ['[B, 196, 768]'], deps: 'Scale_Embedding, Conv2d', shapeDetails: ['B: Kích thước Batch', '196: Số lượng token (được tính bằng cách chia ảnh 224x224 thành các ô 16x16. Ta có 14x14 ô = 196 patch tokens)', '768: Chiều không gian embedding (d_model) để mã hoá thông tin mỗi patch'] } },
+                { data: { id: 'transformer', parent: 'g_backbone', label: 'Transformer Encoder (x12)', type: 'model', desc: '12 layers of MultiHead Attention and FeedForward. Supports EViT token pruning via keep_rate.', filepath: 'model/sa.py', inputs: ['[B, 197, 768] (with CLS)'], outputs: ['[B, 197, 768]'], deps: 'Encoder, Encoder1DBlock', shapeDetails: ['197: Chính là 196 patch tokens + 1 [CLS] token được chèn thêm vào đầu chuỗi. [CLS] token sẽ tóm tắt thông tin của toàn bức ảnh'] } },
+                { data: { id: 'self_attn', parent: 'g_backbone', label: 'Self Attention Split', type: 'model', desc: 'Splits features into [CLS] token for classification/triplet and Patch tokens for spatial matching.', filepath: 'model/model.py', inputs: ['[B, 197, 768]'], outputs: ['CLS: [B, 1, 768]', 'Tokens: [B, 196, 768]'], shapeDetails: ['1: Tách riêng [CLS] token ra để dùng cho loss Triplet', '196: Giữ lại riêng 196 patch tokens để thực hiện tìm kiếm mức độ chi tiết (local patch matching) ở bước sau'] } },
+
+                // Embedding Nodes
+                { data: { id: 'cross_attn', parent: 'g_embed', label: 'Cross-Attention', type: 'model', desc: 'Exchanges information between sketch tokens and image tokens.', filepath: 'model/ca.py', inputs: ['[B, 196, 768]'], outputs: ['[B, 196, 768]'], deps: 'MultiHeadedAttention, PositionwiseFeedForward', shapeDetails: ['B: Kích thước Batch', '196: Số lượng patch tokens (đang giao tiếp thông tin chéo giữa khối phác thảo và ảnh thực)', '768: Kích thước vector đặc trưng'] } },
+                { data: { id: 'spatial_red', parent: 'g_embed', label: 'Spatial Reduction (Conv2d)', type: 'model', desc: 'Downsamples 14x14 tokens to 7x7 tokens using stride 2 convolution, and reduces channels 768 -> 512.', filepath: 'model/model.py', inputs: ['[B, 768, 14, 14]'], outputs: ['[B, 49, 512]'], deps: 'nn.Conv2d(768, 512, 2, 2)', shapeDetails: ['[B, 768, 14, 14]: Chuỗi 196 tokens được sắp xếp lại (reshape) thành lưới không gian 14x14', '49: Sử dụng tích chập (Conv2d) với stride=2 để nén lưới 14x14 xuống còn lưới 7x7 (tổng cộng 49 ô/tokens)', '512: Nén số kênh (channels) từ 768 xuống còn 512 chiều'] } },
+
+                // Retrieval Nodes
+                { data: { id: 'cosine_sim', parent: 'g_retrieval', label: 'Cosine Similarity Matrix', type: 'tensor', desc: 'Computes dense pairwise cosine similarity between 49 sketch tokens and 49 image tokens.', filepath: 'model/rn.py', inputs: ['sk_fea: [B, 49, 512]', 'im_fea: [B, 49, 512]'], outputs: ['[B, 49, 49]'], deps: 'cos_similar()', shapeDetails: ['49, 512: 49 tokens của sketch và 49 tokens của image (mỗi token 512 chiều)', '[B, 49, 49]: Đây là ma trận tương đồng (similarity matrix). Mỗi hàng/cột thể hiện điểm số cosine giữa 1 patch của sketch và tất cả 49 patches của ảnh thực'] } },
+                { data: { id: 'rn_network', parent: 'g_retrieval', label: 'Relation Network', type: 'model', desc: 'MLP that maps the flattened 49x49 similarity matrix to a final [0, 1] matching score using Sigmoid.', filepath: 'model/rn.py', inputs: ['[B, 2401]'], outputs: ['[B, 1] rn_score'], shapeDetails: ['2401: Trải phẳng toàn bộ ma trận tương đồng 49x49 thành 1 vector 1D (49 * 49 = 2401)', '1: Output là 1 điểm số thực (float) được đưa qua hàm Sigmoid nằm trong khoảng 0 đến 1, thể hiện độ khớp nhau giữa ảnh và hình vẽ'] } },
+
+                // Loss Nodes
+                { data: { id: 'triplet_loss', parent: 'g_loss', label: 'Triplet Margin Loss', type: 'loss', desc: 'Computes triplet loss on [CLS] tokens to cluster positive pairs and push away negatives. Margin = 1.0, p=2.', filepath: 'utils/loss.py', inputs: ['sk_p, im_p, im_n [CLS Tokens]'], outputs: ['loss_tri (weight: 2.0)'], shapeDetails: ['[CLS Tokens]: Tensor kích thước [B, 768]. Loss này tính khoảng cách Euclid giữa các đặc trưng toàn cục để kéo gần cặp đúng (positive) và đẩy xa cặp sai (negative)'] } },
+                { data: { id: 'rn_loss', parent: 'g_loss', label: 'Relation MSE Loss', type: 'loss', desc: 'MSE loss between Relation Network score and binary target labels (clamped to 0.01 - 0.99).', filepath: 'utils/loss.py', inputs: ['rn_score', 'targets'], outputs: ['loss_rn (weight: 4.0)'], shapeDetails: ['rn_score: Điểm số kết hợp dạng [B, 1]', 'targets: Nhãn giám sát (1 cho cặp khớp, 0 cho cặp không khớp) được tính MSE Loss'] } },
+                { data: { id: 'optimizer', parent: 'g_loss', label: 'AdamW Optimizer', type: 'loss', desc: 'Updates model parameters based on combined loss.', filepath: 'utils/util.py', inputs: ['loss = 2*triplet + 4*rn'], outputs: ['Weight updates'], deps: 'torch.optim.AdamW' } }
+            ],
+            edges: [
+                { data: { id: 'e1', source: 'dataset', target: 'loader' } },
+                { data: { id: 'e2', source: 'loader', target: 'aug' } },
+                { data: { id: 'e3', source: 'aug', target: 'patch_emb', label: '[B, 3, 224, 224]' } },
+                
+                { data: { id: 'e4', source: 'patch_emb', target: 'transformer', label: '+ CLS & Pos' } },
+                { data: { id: 'e5', source: 'transformer', target: 'self_attn', label: '[B, 197, 768]' } },
+                
+                { data: { id: 'e6', source: 'self_attn', target: 'cross_attn', label: 'Tokens [196x768]' } },
+                { data: { id: 'e7', source: 'self_attn', target: 'triplet_loss', label: 'CLS [1x768]' } },
+                
+                { data: { id: 'e8', source: 'cross_attn', target: 'spatial_red', label: '[B, 768, 14, 14]' } },
+                { data: { id: 'e9', source: 'spatial_red', target: 'cosine_sim', label: '[B, 49, 512]' } },
+                
+                { data: { id: 'e10', source: 'cosine_sim', target: 'rn_network', label: 'Flatten [B, 2401]' } },
+                
+                { data: { id: 'e11', source: 'rn_network', target: 'rn_loss', label: 'rn_score [B, 1]' } },
+                
+                { data: { id: 'e12', source: 'triplet_loss', target: 'optimizer' } },
+                { data: { id: 'e13', source: 'rn_loss', target: 'optimizer' } }
+            ]
+        };
+
+        // --- Stylesheet for Cytoscape ---
+        const cyStyles = [
+            {
+                selector: 'node[^parent]', // Groups
+                style: {
+                    'label': 'data(label)',
+                    'text-valign': 'top',
+                    'text-halign': 'center',
+                    'text-margin-y': -8,
+                    'color': '#64748b',
+                    'font-size': '14px',
+                    'font-weight': '600',
+                    'font-family': 'Inter',
+                    'background-color': '#f1f5f9',
+                    'background-opacity': 0.8,
+                    'border-width': 1,
+                    'border-style': 'dashed',
+                    'border-color': '#cbd5e1',
+                    'padding': 20,
+                    'shape': 'roundrectangle'
+                }
+            },
+            {
+                selector: 'node[parent]', // Child nodes
+                style: {
+                    'label': 'data(label)',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'text-wrap': 'wrap',
+                    'color': '#0f172a',
+                    'font-size': '12px',
+                    'font-family': 'Inter',
+                    'font-weight': '500',
+                    'background-color': '#ffffff',
+                    'border-width': 2,
+                    'border-color': '#e2e8f0',
+                    'shape': 'roundrectangle',
+                    'width': 160,
+                    'height': 60,
+                    'transition-property': 'background-color, border-color, box-shadow',
+                    'transition-duration': '0.2s'
+                }
+            },
+            // Node Type Colors (Light Theme)
+            {
+                selector: 'node[type="data"]',
+                style: { 'border-color': '#059669', 'border-width': 3 }
+            },
+            {
+                selector: 'node[type="model"]',
+                style: { 'border-color': '#2563eb', 'border-width': 3 }
+            },
+            {
+                selector: 'node[type="loss"]',
+                style: { 'border-color': '#dc2626', 'border-width': 3 }
+            },
+            {
+                selector: 'node[type="tensor"]',
+                style: { 'border-color': '#7c3aed', 'border-width': 3, 'shape': 'hexagon', 'width': 180 }
+            },
+            // Edges (Light Theme)
+            {
+                selector: 'edge',
+                style: {
+                    'width': 2,
+                    'line-color': '#cbd5e1',
+                    'target-arrow-color': '#cbd5e1',
+                    'target-arrow-shape': 'triangle',
+                    'curve-style': 'bezier',
+                    'label': 'data(label)',
+                    'font-size': '11px',
+                    'font-weight': '500',
+                    'color': '#475569',
+                    'text-background-opacity': 0.9,
+                    'text-background-color': '#f8fafc',
+                    'text-background-padding': 3,
+                    'text-background-shape': 'roundrectangle',
+                    'edge-text-rotation': 'autorotate'
+                }
+            },
+            // States
+            {
+                selector: 'node:selected',
+                style: {
+                    'background-color': '#f1f5f9',
+                    'border-color': '#0f172a',
+                    'border-width': 4,
+                    'underlay-color': '#0f172a',
+                    'underlay-padding': 8,
+                    'underlay-opacity': 0.1,
+                    'underlay-shape': 'roundrectangle'
+                }
+            },
+            {
+                selector: 'edge.highlighted',
+                style: {
+                    'width': 4,
+                    'line-color': '#2563eb',
+                    'target-arrow-color': '#2563eb',
+                    'line-style': 'dashed',
+                    'line-dash-pattern': [6, 3],
+                    'line-dash-offset': 24,
+                    'transition-property': 'line-color, target-arrow-color, width',
+                    'transition-duration': '0.2s'
+                }
+            },
+            {
+                selector: '.dimmed',
+                style: {
+                    'opacity': 0.2
+                }
+            }
+        ];
+
+        // --- Initialize Cytoscape ---
+        const cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements: architectureData,
+            style: cyStyles,
+            layout: {
+                name: 'breadthfirst',
+                directed: true,
+                spacingFactor: 1.5,
+                padding: 50
+            },
+            wheelSensitivity: 0.2,
+            minZoom: 0.1,
+            maxZoom: 3
+        });
+
+        // --- Interaction Logic ---
+        
+        // Edge Animation (Marching ants effect for highlighted edges)
+        let offset = 0;
+        function animateEdges() {
+            offset -= 1;
+            cy.edges('.highlighted').style('line-dash-offset', offset);
+            requestAnimationFrame(animateEdges);
+        }
+        animateEdges();
+
+        // Node Selection & Highlighting
+        cy.on('tap', 'node[parent]', function(evt) {
+            const node = evt.target;
+            const data = node.data();
+            
+            // Highlight tracing
+            cy.elements().removeClass('highlighted').removeClass('dimmed');
+            cy.elements().difference(node.neighborhood().union(node)).addClass('dimmed');
+            node.connectedEdges().addClass('highlighted');
+            
+            // Update Sidebar
+            document.getElementById('empty-state').style.display = 'none';
+            document.getElementById('detail-card').style.display = 'block';
+            
+            document.getElementById('d-title').textContent = data.label.replace('\n', ' ');
+            document.getElementById('d-desc').textContent = data.desc || 'No description available.';
+            document.getElementById('d-filepath').textContent = data.filepath || 'N/A';
+            
+            // Badge
+            const badge = document.getElementById('d-badge');
+            badge.className = `badge ${data.type}`;
+            badge.textContent = data.type.toUpperCase();
+
+            // Inputs
+            const inputsDiv = document.getElementById('d-inputs');
+            if (data.inputs && data.inputs.length > 0) {
+                document.getElementById('section-inputs').style.display = 'block';
+                inputsDiv.innerHTML = data.inputs.map(i => `<div class="tensor-box">${i}</div>`).join('');
+            } else {
+                document.getElementById('section-inputs').style.display = 'none';
+            }
+
+            // Outputs
+            const outputsDiv = document.getElementById('d-outputs');
+            if (data.outputs && data.outputs.length > 0) {
+                document.getElementById('section-outputs').style.display = 'block';
+                outputsDiv.innerHTML = data.outputs.map(o => `<div class="tensor-box">${o}</div>`).join('');
+            } else {
+                document.getElementById('section-outputs').style.display = 'none';
+            }
+
+            // Shape Details (Giải thích)
+            const shapesSection = document.getElementById('section-shapes');
+            const shapesList = document.getElementById('d-shapes');
+            if (data.shapeDetails && data.shapeDetails.length > 0) {
+                shapesSection.style.display = 'block';
+                shapesList.innerHTML = data.shapeDetails.map(detail => `<li style="margin-bottom: 8px;"><strong>${detail.split(':')[0]}:</strong> ${detail.split(':').slice(1).join(':')}</li>`).join('');
+            } else {
+                shapesSection.style.display = 'none';
+            }
+
+            // Dependencies
+            const depsSection = document.getElementById('section-deps');
+            if (data.deps) {
+                depsSection.style.display = 'block';
+                document.getElementById('d-deps').textContent = data.deps;
+            } else {
+                depsSection.style.display = 'none';
+            }
+        });
+
+        cy.on('tap', function(evt) {
+            if (evt.target === cy) {
+                // Clicked on background
+                cy.elements().removeClass('highlighted').removeClass('dimmed');
+                document.getElementById('empty-state').style.display = 'block';
+                document.getElementById('detail-card').style.display = 'none';
+            }
+        });
+
+        // Search Functionality
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase();
+            if (!query) {
+                cy.elements().removeClass('dimmed');
+                return;
+            }
+            
+            cy.elements().addClass('dimmed');
+            const matches = cy.nodes().filter(function(node) {
+                const d = node.data();
+                if (!d.parent) return false; // skip groups
+                const text = (d.label + ' ' + (d.desc || '') + ' ' + (d.filepath || '')).toLowerCase();
+                return text.includes(query);
+            });
+            
+            matches.removeClass('dimmed');
+            matches.connectedEdges().removeClass('dimmed');
+            
+            // Also undim parents of matches
+            matches.parent().removeClass('dimmed');
+        });
+
+        // Controls
+        document.getElementById('btn-fit').addEventListener('click', () => {
+            cy.animate({ fit: { padding: 50 }, duration: 500 });
+        });
+
+        document.getElementById('btn-layout').addEventListener('click', () => {
+            const layout = cy.layout({
+                name: 'breadthfirst',
+                directed: true,
+                animate: true,
+                animationDuration: 500
+            });
+            layout.run();
+        });
+
+        document.getElementById('btn-fullscreen').addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
