@@ -1,0 +1,5 @@
+.venv
+__pycache__
+datasets/Sketchy/256x256
+datasets/Sketchy/EXTEND_image_sketchy_ready
+best_checkpoint.pth

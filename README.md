@@ -111,8 +111,8 @@ python -u train.py --data_path [./datasets] \
 ### Evaluate
 
 ```bash
-python -u test.py -r rn -- testall
-python -u test.py -r sa -- testall
+python -u test.py -r rn --testall
+python -u test.py -r sa --testall
 ```
 
 Evaluate model on Sketchy Ext.
