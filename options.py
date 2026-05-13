@@ -12,6 +12,8 @@ class Option:
                             choices=['sketchy_extend', 'tu_berlin', 'Quickdraw'])
         parser.add_argument('--test_class', type=str, default='test_class_sketchy25',
                             choices=['test_class_sketchy25', 'test_class_sketchy21', 'test_class_tuberlin30', 'Quickdraw'])
+        parser.add_argument('--train_split', type=str, default='train', choices=['train', 'train90'],
+                            help='Train filelist split to use. Run scripts/split_train_9_1.py before using train90.')
 
         # model
         parser.add_argument('--cls_number', type=int, default=100)

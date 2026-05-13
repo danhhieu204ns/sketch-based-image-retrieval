@@ -7,8 +7,8 @@ import cv2
 
 
 def get_all_train_file(args, skim):
-    if skim != 'sketch' or skim != 'image':
-        NameError(skim + ' not implemented!')
+    if skim != 'sketch' and skim != 'image':
+        raise NameError(skim + ' not implemented!')
 
     if args.dataset == 'sketchy_extend':
         if args.test_class == "test_class_sketchy25":
@@ -44,6 +44,9 @@ def get_all_train_file(args, skim):
 
     else:
         NameError(skim + ' not implemented! ')
+
+    if args.train_split != 'train':
+        file_ls_file = file_ls_file.replace('_train.txt', f'_{args.train_split}.txt')
 
     with open(file_ls_file, 'r') as fh:
         file_content = fh.readlines()

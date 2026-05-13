@@ -1,19 +1,4 @@
 # Sketch based Image retrieval
-## Datasets
-Please download SBIR datasets from the official websites or Google Drive and `tar -zxvf dataset` to the corresponding directory in `./datasets`. We provide train and test splits for different datasets.
-
-### Sketchy
-[Sketchy official website](https://sketchy.eye.gatech.edu/)
-[Google Drive](https://drive.google.com/file/d/11GAr0jrtowTnR3otyQbNMSLPeHyvecdP/view?usp=sharing).
-
-### TU-Berlin
-[TU-Berlin official website](http://cybertron.cg.tu-berlin.de/eitz/projects/classifysketch/)
-[Google Drive](https://drive.google.com/file/d/12VV40j5Nf4hNBfFy0AhYEtql1OjwXAUC/view?usp=sharing).
-
-### QuickDraw
-[QuickDraw official website](https://github.com/googlecreativelab/quickdraw-dataset)
-[Google Drive](https://drive.google.com/file/d/1EZ8xWRzCi8JcKiFtciD2PwguofC785gK/view?usp=sharing).
-
 ## Installation
 
 ```bash
@@ -26,13 +11,14 @@ pip install -r requirements.txt
 
 ViT-B_16
 
-### Haperparameters
+### Hyperparameters
 Here is a list of full options for the model:
 ```bash
 # dataset
 data_path,            # path to load datasets.
 dataset,              # choose a dataset for train or eval.
 test_class,           # choose a zero-shot split of dataset.
+train_split,          # train filelist to use: train or train90.
 
 # model
 cls_number,           # class number if necessary, 100 as default.
@@ -67,43 +53,33 @@ seed,                 # random seed, 2021 as default.
 ### Training
 
 ```bash
-python -u train.py 
+python scripts/split_train_9_1.py --data_path ./datasets --dataset all --seed 2021
+```
+
+This creates:
+
+```text
+*_train90.txt   # 90% of the original train filelist, used for training
+*_val10.txt     # remaining 10%, kept as a held-out split
+```
+
+Then pass `--train_split train90` when training. The original zero-shot test split is unchanged.
+
+```bash
+python -u train.py --train_split train90
 ```
 
 Train model on Sketchy Ext.
 ```bash
-python -u train.py --data_path [./datasets] \
-                   --dataset sketchy_extend \ 
-                   --test_class test_class_sketchy25 \ 
-                   --batch 15 \ 
-                   --epoch 30 \ 
-                   -s [./checkpoints/sketchy_ext] \
-                   -c 0 \ 
-                   -r rn 
-```
-
-Train model on TU-Berlin Ext.
-```bash
-python -u train.py --data_path [./datasets] \
-                   --dataset tu_berlin \ 
-                   --test_class test_class_tuberlin30 \ 
-                   --batch 15 \ 
-                   --epoch 30 \ 
-                   -s [./checkpoints/tuberlin_ext] \
-                   -c 0 \ 
-                   -r rn \ 
-```
-
-Train model on QuickDraw Ext.
-```bash
-python -u train.py --data_path [./datasets] \
-                   --dataset Quickdraw \ 
-                   --test_class Quickdraw \ 
-                   --batch 15 \ 
-                   --epoch 30 \ 
-                   -s [./checkpoints/quickdraw_ext] \
-                   -c 0 \ 
-                   -r rn 
+python -u train.py --data_path ./datasets \
+                   --dataset sketchy_extend \
+                   --test_class test_class_sketchy25 \
+                   --train_split train90 \
+                   --batch 15 \
+                   --epoch 30 \
+                   -s ./checkpoints/sketchy_ext \
+                   -c 0 \
+                   -r rn
 ```
 
 ## Evaluation
@@ -121,28 +97,6 @@ python -u test.py --data_path [./datasets] \
                   --dataset sketchy_extend \
                   --test_class test_class_sketchy25 \ 
                   -l [./checkpoints/sketchy_ext/best_checkpoint.pth] \
-                  -c 0 \ 
-                  -r rn \ 
-                  --testall
-```
-
-Evaluate model on TU-Berlin Ext.
-```bash
-python -u test.py --data_path [./datasets] \
-                  --dataset tu_berlin \
-                  --test_class test_class_tuberlin30 \ 
-                  -l [./checkpoints/tuberlin_ext/best_checkpoint.pth] \
-                  -c 0 \ 
-                  -r rn \ 
-                  --testall
-```
-
-Evaluate model on QuickDraw Ext.
-```bash
-python -u test.py --data_path [./datasets] \
-                  --dataset Quickdraw \
-                  --test_class Quickdraw \ 
-                  -l [./checkpoints/quickdraw_ext/best_checkpoint.pth] \
                   -c 0 \ 
                   -r rn \ 
                   --testall
