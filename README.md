@@ -5,6 +5,14 @@
 pip install -r requirements.txt
 ```
 
+## Run search app
+
+```bash
+uvicorn app_sketch_search:app --reload
+```
+
+Then open `http://127.0.0.1:8000`.
+
 ## Train
 
 ### Pretrained ViT backbone
