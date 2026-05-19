@@ -71,14 +71,14 @@ python -u train.py --train_split train90
 
 Train model on Sketchy Ext.
 ```bash
-python -u train.py --data_path ./datasets \
-                   --dataset sketchy_extend \
-                   --test_class test_class_sketchy25 \
-                   --train_split train90 \
-                   --batch 15 \
-                   --epoch 30 \
-                   -s ./checkpoints/sketchy_ext \
-                   -c 0 \
+python -u train.py --data_path ./datasets 
+                   --dataset sketchy_extend 
+                   --test_class test_class_sketchy25 
+                   --train_split train90 
+                   --batch 15 
+                   --epoch 3
+                   -s ./checkpoints/sketchy_ext 
+                   -c 0 
                    -r rn
 ```
 
@@ -93,11 +93,11 @@ python -u test.py -r sa --testall
 
 Evaluate model on Sketchy Ext.
 ```bash
-python -u test.py --data_path [./datasets] \
-                  --dataset sketchy_extend \
-                  --test_class test_class_sketchy25 \ 
-                  -l [./checkpoints/sketchy_ext/best_checkpoint.pth] \
-                  -c 0 \ 
-                  -r rn \ 
-                  --testall
+python -u test.py --data_path ./datasets 
+  --dataset sketchy_extend 
+  --test_class test_class_sketchy25 
+  -l ./checkpoints/sketchy_ext/best_checkpoint.pth 
+  -c 0 
+  -r rn 
+  --testall
 ```

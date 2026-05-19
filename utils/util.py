@@ -19,7 +19,10 @@ def build_optimizer(args, model):
 def load_checkpoint(model_file):
     if os.path.isfile(model_file):
         print("=> loading model '{}'".format(model_file))
-        checkpoint = torch.load(model_file)
+        try:
+            checkpoint = torch.load(model_file, map_location='cpu', weights_only=False)
+        except TypeError:
+            checkpoint = torch.load(model_file, map_location='cpu')
         return checkpoint
     else:
         print("=> no model found at '{}'".format(model_file))

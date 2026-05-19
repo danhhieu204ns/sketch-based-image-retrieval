@@ -42,14 +42,14 @@ class TrainSet(data.Dataset):
 
         sk_label = self.class_dict.get(self.choose_label_name[0])
         im_label = self.class_dict.get(self.choose_label_name[0])
-        sk_label_neg = self.class_dict.get(self.choose_label_name[0])
+        sk_label_neg = self.class_dict.get(self.choose_label_name[1])
         im_label_neg = self.class_dict.get(self.choose_label_name[-1])
 
         sketch = get_file_iccv(self.pre_load.all_train_sketch_label, self.root_dir, self.choose_label_name[0],
                                self.pre_load.all_train_sketch_cls_name, 1, self.pre_load.all_train_sketch)
         image = get_file_iccv(self.pre_load.all_train_image_label, self.root_dir, self.choose_label_name[0],
                               self.pre_load.all_train_image_cls_name, 1, self.pre_load.all_train_image)
-        sketch_neg = get_file_iccv(self.pre_load.all_train_sketch_label, self.root_dir, self.choose_label_name[0],
+        sketch_neg = get_file_iccv(self.pre_load.all_train_sketch_label, self.root_dir, self.choose_label_name[1],
                                    self.pre_load.all_train_sketch_cls_name, 1, self.pre_load.all_train_sketch)
         image_neg = get_file_iccv(self.pre_load.all_train_image_label, self.root_dir, self.choose_label_name[-1],
                                   self.pre_load.all_train_image_cls_name, 1, self.pre_load.all_train_image)

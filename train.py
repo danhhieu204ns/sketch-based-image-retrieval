@@ -11,11 +11,10 @@ from data_utils.dataset import load_data
 from model.model import Model
 from utils.util import build_optimizer, save_checkpoint, setup_seed
 from utils.loss import triplet_loss, rn_loss
-from utils.valid import valid_cls
 
 
 def train():
-    train_data, sk_valid_data, im_valid_data = load_data(args)
+    train_data, _, _ = load_data(args)
 
     model = Model(args)
     model = model.cuda()
@@ -26,7 +25,6 @@ def train():
     train_data_loader = DataLoader(train_data, args.batch, num_workers=2, drop_last=True)
 
     start_epoch = 0
-    accuracy = 0
 
     for i in range(start_epoch, args.epoch):
         print('------------------------train------------------------')
@@ -70,19 +68,14 @@ def train():
                 print(f'epoch_{epoch} step_{step} eta {remaining_time}: loss:{loss.item():.3f} '
                       f'tri:{losstri.item():.3f} rn:{lossrn.item():.3f}')
 
-        if epoch >= 10:
-            print('------------------------valid------------------------')
-            # log
-            map_all, map_200, precision_100, precision_200 = valid_cls(args, model, sk_valid_data, im_valid_data)
-            print(f'map_all:{map_all:.4f} map_200:{map_200:.4f} precision_100:{precision_100:.4f} precision_200:{precision_200:.4f}')
-            # save
-            if map_all > accuracy:
-                accuracy = map_all
-                precision = precision_100
-                print("Save the BEST {}th model......".format(epoch))
-                save_checkpoint(
-                    {'model': model.state_dict(), 'epoch': epoch, 'map_all': accuracy, 'precision_100': precision},
-                    args.save, f'best_checkpoint')
+        print('------------------------save------------------------')
+        print("Save the LAST {}th model......".format(epoch))
+        save_checkpoint(
+            {'model': model.state_dict(), 'epoch': epoch},
+            args.save, f'last_checkpoint')
+        save_checkpoint(
+            {'model': model.state_dict(), 'epoch': epoch},
+            args.save, f'checkpoint_epoch_{epoch}')
 
 
 if __name__ == '__main__':
