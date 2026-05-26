@@ -13,6 +13,9 @@ uvicorn app_sketch_search:app --reload
 
 Then open `http://127.0.0.1:8000`.
 
+The search app L2-normalizes sketch and image embeddings before FAISS inner-product
+retrieval, so scores are cosine similarities.
+
 ## Train
 
 ### Pretrained ViT backbone
@@ -109,3 +112,12 @@ python -u test.py --data_path ./datasets
   -r rn 
   --testall
 ```
+
+### Compare retrieval indexes
+
+```bash
+python scripts/compare_retrieval_methods.py --splits val10 zeroshot1 zeroshot0
+```
+
+The comparison script also L2-normalizes embeddings by default. Pass
+`--no_normalize` only when evaluating raw inner-product scores.

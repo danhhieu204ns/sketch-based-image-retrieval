@@ -50,8 +50,14 @@ def resolve_split_embeddings(split: str, embeddings_dir: str) -> Tuple[str, str,
 
 
 def normalize_embeddings(embeddings: np.ndarray) -> np.ndarray:
-    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-    return embeddings / (norms + 1e-8)
+    vectors = np.asarray(embeddings, dtype=np.float32)
+    if vectors.ndim == 1:
+        vectors = vectors.reshape(1, -1)
+    if vectors.size == 0:
+        return np.ascontiguousarray(vectors)
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return np.ascontiguousarray(vectors / norms, dtype=np.float32)
 
 
 def build_index(
@@ -154,7 +160,7 @@ def compare_embedding_pair(
     sk_embeddings, sk_labels = load_embeddings(sketch_embeddings_path)
     im_embeddings, im_labels = load_embeddings(image_embeddings_path)
 
-    if args.normalize:
+    if not args.no_normalize:
         sk_embeddings = normalize_embeddings(sk_embeddings)
         im_embeddings = normalize_embeddings(im_embeddings)
 
@@ -253,7 +259,18 @@ def main() -> None:
     parser.add_argument("--embeddings_dir", type=str, default="./embeddings")
     parser.add_argument("--out_csv", type=str, default="")
     parser.add_argument("--out_json", type=str, default="")
-    parser.add_argument("--normalize", action="store_true", help="L2-normalize embeddings")
+    parser.add_argument(
+        "--normalize",
+        dest="no_normalize",
+        action="store_false",
+        help="L2-normalize embeddings before inner-product retrieval (default).",
+    )
+    parser.add_argument(
+        "--no_normalize",
+        action="store_true",
+        help="Disable default L2 normalization before inner-product retrieval.",
+    )
+    parser.set_defaults(no_normalize=False)
     parser.add_argument("--k_eval", type=int, default=0, help="Top-K to evaluate. 0 means all.")
     parser.add_argument("--nlist", type=int, default=128)
     parser.add_argument("--nprobe", type=int, default=16)

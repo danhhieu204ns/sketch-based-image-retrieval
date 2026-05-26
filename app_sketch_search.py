@@ -13,7 +13,7 @@ import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,11 +45,12 @@ app = FastAPI(title="Sketch Image Search")
 
 
 class SearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     split: str
     class_name: str = Field(..., min_length=1)
     methods: List[str] = Field(default_factory=lambda: list(SEARCH_MODES))
     top_k: int = Field(default=TOP_K_DEFAULT, ge=1, le=50)
-    normalize: bool = True
     random_seed: int | None = None
 
 
@@ -261,19 +262,20 @@ def should_use_aligned_paths(
     return len(filelist_paths) > 0 and len(aligned_paths) > 0 and missing == 0
 
 
-def as_faiss_matrix(vectors: np.ndarray, normalize: bool) -> np.ndarray:
+def as_faiss_matrix(vectors: np.ndarray) -> np.ndarray:
     matrix = np.asarray(vectors, dtype=np.float32)
     if matrix.ndim == 1:
         matrix = matrix.reshape(1, -1)
-    matrix = np.ascontiguousarray(matrix)
+    return np.ascontiguousarray(matrix)
 
-    if normalize:
-        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        matrix = matrix / norms
-        matrix = np.ascontiguousarray(matrix, dtype=np.float32)
 
-    return matrix
+def normalize_embeddings(vectors: np.ndarray) -> np.ndarray:
+    matrix = as_faiss_matrix(vectors)
+    if matrix.size == 0:
+        return matrix
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return np.ascontiguousarray(matrix / norms, dtype=np.float32)
 
 
 def safe_ivf_nlist(vector_count: int) -> int:
@@ -297,11 +299,11 @@ def safe_pq_nbits(vector_count: int) -> int:
     return max(3, min(PQ_NBITS, int(math.floor(math.log2(recommended_centroids)))))
 
 
-def build_faiss_index(image_embeddings: np.ndarray, method: str, normalize: bool):
+def build_faiss_index(image_embeddings: np.ndarray, method: str):
     if method not in SEARCH_MODES:
         raise ValueError(f"Unsupported FAISS mode: {method}")
 
-    vectors = as_faiss_matrix(image_embeddings, normalize)
+    vectors = as_faiss_matrix(image_embeddings)
     vector_count, dimension = vectors.shape
     if vector_count == 0 or dimension == 0:
         raise ValueError("No image embeddings available for FAISS search.")
@@ -358,9 +360,9 @@ def build_faiss_index(image_embeddings: np.ndarray, method: str, normalize: bool
 
 
 @lru_cache(maxsize=32)
-def build_cached_index(split: str, method: str, normalize: bool):
+def build_cached_index(split: str, method: str):
     context = get_split_context(split)
-    return build_faiss_index(context.image_embeddings, method, normalize)
+    return build_faiss_index(context.image_embeddings, method)
 
 
 def search_faiss(
@@ -368,10 +370,9 @@ def search_faiss(
     query_embedding: np.ndarray,
     method: str,
     top_k: int,
-    normalize: bool,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    index = build_cached_index(split, method, normalize)
-    query = as_faiss_matrix(query_embedding, normalize)
+    index = build_cached_index(split, method)
+    query = as_faiss_matrix(query_embedding)
     result_count = min(int(top_k), index.ntotal)
     scores, indices = index.search(query, result_count)
     valid = indices[0] >= 0
@@ -447,6 +448,9 @@ def get_split_context(split: str) -> SplitContext:
         warnings.append(
             f"{len(missing_preferred)} classes from class list have no sketch paths in current embeddings."
         )
+
+    sketch_embeddings = normalize_embeddings(sketch_embeddings)
+    image_embeddings = normalize_embeddings(image_embeddings)
 
     return SplitContext(
         split=split,
@@ -565,7 +569,6 @@ def search(request: SearchRequest):
                 query_embedding,
                 method,
                 request.top_k,
-                request.normalize,
             )
         except (RuntimeError, ValueError) as exc:
             method_results.append({"method": method, "error": str(exc), "results": []})
@@ -625,7 +628,7 @@ INDEX_HTML = """
   <style>
     :root {
       color-scheme: light;
-      --bg: #f5f2eb;
+      --bg: #ffffff;
       --panel: #ffffff;
       --ink: #202124;
       --muted: #62656a;
@@ -643,15 +646,13 @@ INDEX_HTML = """
       margin: 0;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
-      background:
-        radial-gradient(900px 420px at 5% 0%, #fff2cf 0%, transparent 55%),
-        linear-gradient(180deg, #f8f6f1 0%, var(--bg) 100%);
+      background: #ffffff;
     }
 
     main {
-      width: min(1440px, calc(100% - 40px));
-      margin: 0 auto;
-      padding: 24px 0 44px;
+      width: 100%;
+      margin: 0;
+      padding: 24px 20px 44px;
     }
 
     header {
@@ -687,7 +688,7 @@ INDEX_HTML = """
     .panel,
     .method,
     .query {
-      background: rgba(255, 255, 255, 0.86);
+      background: #ffffff;
       border: 1px solid var(--line);
       border-radius: 8px;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -835,8 +836,12 @@ INDEX_HTML = """
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(0, 1fr);
+      grid-template-columns: repeat(10, minmax(0, 1fr));
       gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 4px;
     }
 
     .result {
@@ -874,7 +879,7 @@ INDEX_HTML = """
     }
 
     @media (max-width: 860px) {
-      main { width: min(100% - 24px, 720px); }
+      main { width: 100%; padding: 16px 12px 32px; }
       header { display: block; }
       .status { text-align: left; margin-top: 8px; }
       .layout { grid-template-columns: 1fr; }
@@ -904,11 +909,6 @@ INDEX_HTML = """
         <label for="topK">Top K</label>
         <input id="topK" type="number" min="1" max="50" value="10" />
 
-        <label class="inline">
-          <input id="normalize" type="checkbox" checked />
-          Normalize embeddings
-        </label>
-
         <button id="searchBtn" type="button">Search</button>
         <div id="warnings" class="warnings"></div>
         <div id="error" class="error"></div>
@@ -931,7 +931,6 @@ INDEX_HTML = """
     const classEl = document.getElementById("className");
     const methodsEl = document.getElementById("methods");
     const topKEl = document.getElementById("topK");
-    const normalizeEl = document.getElementById("normalize");
     const buttonEl = document.getElementById("searchBtn");
     const statusEl = document.getElementById("status");
     const warningsEl = document.getElementById("warnings");
@@ -1027,8 +1026,7 @@ INDEX_HTML = """
             split: splitEl.value,
             class_name: classEl.value,
             methods,
-            top_k: Number(topKEl.value),
-            normalize: normalizeEl.checked
+            top_k: Number(topKEl.value)
           })
         });
         showWarnings(data.warnings);
